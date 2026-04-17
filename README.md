@@ -111,8 +111,11 @@ dataset_imagens/
 │   ├── muito_pequena/    ← recortes abaixo de 100x100px
 │   ├── baixa_confianca/  ← CLIP com confiança abaixo de 22%
 │   └── filtro_texto/     ← recortes identificados como texto pelo OpenCV
+├── pdfs_base/            ← todos os PDFs usados para gerar este dataset
 └── metadata.csv
 ```
+
+A pasta `pdfs_base/` contém os 118 artigos científicos agronômicos processados. Eles estão disponíveis para que a equipe de classificação possa consultar o PDF original ao revisar uma imagem e confirmar se a classificação está correta.
 
 ---
 
