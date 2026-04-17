@@ -267,4 +267,76 @@ pip install pymupdf transformers torch torchvision pillow tqdm opencv-python-hea
 
 ---
 
+## 11. Perguntas
+
+### Sobre o dataset
+
+**Por que só 415 imagens foram classificadas se o total é 1.693?**
+Porque 1.277 recortes foram descartados pelo filtro de texto do OpenCV antes de chegar no CLIP, e o restante foi para as pastas de rejeitadas. As 415 são as que passaram por todos os filtros e receberam uma categoria.
+
+**O que tem na pasta `outro/` com 135 imagens?**
+Imagens que o CLIP não conseguiu encaixar com confiança em nenhuma categoria específica. Podem ser gráficos de dispersão, infográficos, equações renderizadas como imagem, ou figuras de domínio muito específico que o CLIP nunca viu durante o treinamento.
+
+**Por que `grafico_pizza` zerou?**
+O CLIP tem dificuldade em reconhecer gráficos de pizza em artigos científicos porque eles aparecem em escalas, cores e estilos muito variados. O modelo provavelmente classificou essas imagens como `outro` ou `diagrama`. A categoria existe no dataset para quando um modelo especializado for treinado.
+
+**O metadata.csv é suficiente ou precisamos de banco de dados?**
+Para o volume atual de 1.693 registros é suficiente. Qualquer ferramenta de ML lê CSV nativamente sem configuração extra. Se o dataset crescer para dezenas de milhares de imagens após novas rodadas, a migração para SQLite é simples porque as colunas já estão definidas.
+
+**Por que só 1.3% das imagens têm caption?**
+O layout de duas colunas dos artigos científicos frequentemente posiciona a legenda fora da margem de busca de 45pt que o script usa. A legenda pode estar na coluna oposta ou separada por outros elementos. É uma limitação estrutural dos PDFs do corpus, não um bug.
+
+### Sobre o classificador
+
+**Qual é a acurácia do classificador?**
+Não temos esse número ainda porque não existe ground truth. As labels foram geradas automaticamente pelo CLIP e precisam de revisão manual para calcular acurácia real. O que sabemos é que `grafico_barras` e `grafico_linhas` têm qualidade boa visualmente, e `outro` e `icone` têm mais ruído.
+
+**Por que usou CLIP e não um modelo específico para gráficos como ChartVLM?**
+O CLIP foi escolhido como classificador inicial porque é leve, roda localmente sem custo e funciona zero-shot sem precisar de dados de treino. O ChartVLM seria mais preciso para gráficos mas não consegue classificar fotografias, diagramas e mapas. O objetivo aqui não era classificação perfeita mas gerar uma base inicial para a equipe de classificação refinar.
+
+**Dá para treinar um modelo melhor com essas 1.693 imagens?**
+Sim, mas só depois de revisar as labels manualmente. Se treinar com as labels do CLIP o modelo vai aprender os erros do CLIP. Com 400 a 500 imagens corretamente rotuladas já dá para fazer fine-tuning do EfficientNet-B0 com resultado bem melhor que o CLIP atual.
+
+**Por que `diagrama` e `fluxograma` têm tão pouco?**
+Duas razões. Primeiro, o corpus é predominantemente de artigos experimentais que têm mais gráficos de dados do que diagramas conceituais. Segundo, o filtro de bordas Sobel às vezes descarta fluxogramas porque eles têm muitos elementos com bordas horizontais parecidos com texto.
+
+**O que significa confiança 0.22 do CLIP?**
+É o threshold mínimo definido empiricamente. Abaixo disso o CLIP classificava com tanta incerteza que a categoria não tinha valor. 0.22 foi escolhido porque com valores menores o `outro` inflava muito. É um parâmetro ajustável no topo do script.
+
+### Sobre a extração
+
+**Por que renderizar a página inteira em vez de extrair as imagens diretamente do PDF?**
+PDFs armazenam imagens como fragmentos separados. Uma barra de gráfico pode ser um objeto diferente da legenda do eixo. Extraindo por objeto o CLIP recebia fragmentos sem contexto. Renderizando a página e recortando via OpenCV o classificador vê a figura completa.
+
+**Como o script sabe onde está a figura na página?**
+OpenCV detecta contornos de regiões com contraste na página renderizada e calcula o bounding box de cada região. Regiões muito pequenas, muito finas ou que ocupam quase a página inteira são descartadas por filtros geométricos antes de chegar no CLIP.
+
+**Os PDFs escaneados são tratados diferente?**
+Não na versão atual. O pipeline renderiza todas as páginas independente de serem digitais ou escaneadas. A diferença é que páginas escaneadas não têm texto extraível, então a busca de caption retorna vazio para essas imagens.
+
+**O que são os erros MuPDF que aparecem no log?**
+São erros de perfil de cor ICC em alguns PDFs, mensagens `cmsOpenProfileFromMem failed` e `No common ancestor in structure tree`. São completamente inofensivos. O PyMuPDF ignora e continua processando normalmente. Aparecem em aproximadamente 18 dos 118 PDFs.
+
+**Por que tem imagens na pasta `rejeitadas/filtro_texto/`?**
+O filtro `crop_e_figura` descarta recortes com características de texto: muitas linhas horizontais paralelas, proporção muito larga, bordas predominantemente horizontais. Esses recortes são salvos lá em vez de descartados para que a equipe de classificação possa revisar e verificar se algum foi descartado incorretamente.
+
+### Sobre o projeto
+
+**Esse script faz parte do pipeline principal do SB100?**
+É complementar, não parte do pipeline principal. O pipeline principal extrai texto e vetoriza no Qdrant. Este script roda separado sobre os mesmos PDFs já processados e gera o dataset de imagens para a equipe de classificação.
+
+**Esse dataset vai ser atualizado quando chegarem novos PDFs?**
+Sim. O script pode ser rodado novamente a qualquer momento sobre a pasta de PDFs concluídos. A célula 3.5 limpa o dataset anterior antes de rodar. Para manter versões diferentes basta renomear a pasta antes de rodar, por exemplo `dataset_imagens_v2`.
+
+**Por que a pasta tem os PDFs originais junto com as imagens?**
+Para facilitar a revisão manual. Quando a equipe de classificação encontrar uma imagem duvidosa, pode abrir o PDF original e ver a figura no contexto do artigo para decidir a label correta.
+
+**O script roda em CPU também ou precisa de GPU?**
+Roda nos dois. Com GPU CUDA levou 2min35s para 118 PDFs. Em CPU vai ser significativamente mais lento, provavelmente entre 20 e 40 minutos, porque o CLIP é mais pesado sem GPU. Os filtros OpenCV são leves e não dependem de GPU.
+
+**Por que não usaram o Gemini para classificar as imagens como no Script 2 do pipeline?**
+O Gemini tem limite de requisições e custo por chamada. Com 1.693 imagens isso geraria muitas chamadas de API e potencialmente custo. O CLIP roda localmente de graça e sem limite. Além disso um dos objetivos do projeto é explorar a substituição do Gemini por modelos locais, e este script faz parte dessa exploração.
+
+---
+
 *SB100 Agrônomo Virtual | Squad 02 Ingestão e Vetorização | IC FAPESP | 2026*
