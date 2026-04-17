@@ -1,7 +1,7 @@
 # SB100 Agrônomo Virtual
 ## Pipeline de Extração e Classificação de Imagens
 
-**Squad 02 Ingestão e Vetorização** | IC FAPESP | Versão 1.0 | Abril 2025
+**Squad 02 Ingestão e Vetorização** | IC FAPESP | Versão 1.0 | Abril 2026
 
 ---
 
@@ -267,4 +267,4 @@ pip install pymupdf transformers torch torchvision pillow tqdm opencv-python-hea
 
 ---
 
-*SB100 Agrônomo Virtual | Squad 02 Ingestão e Vetorização | IC FAPESP | 2025*
+*SB100 Agrônomo Virtual | Squad 02 Ingestão e Vetorização | IC FAPESP | 2026*
